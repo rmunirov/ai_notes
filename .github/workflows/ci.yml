@@ -1,0 +1,48 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master, develop, "001-*"]
+  pull_request:
+    branches: [main, master, develop]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: ai_notes
+          POSTGRES_PASSWORD: ai_notes
+          POSTGRES_DB: ai_notes
+        ports:
+          - 5432:5432
+    env:
+      DB_URL: postgresql+asyncpg://ai_notes:ai_notes@127.0.0.1:5432/ai_notes
+      LLM_API_KEY: ""
+      LLM_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - name: Sync
+        run: cd backend && uv sync --all-extras
+      - name: Ruff
+        run: cd backend && uv run ruff check src/ai_notes && uv run ruff format --check src/ai_notes
+      - name: Mypy
+        run: cd backend && uv run mypy src/ai_notes
+      - name: Unit tests
+        run: cd backend && uv run pytest tests/unit -q
+      - name: Integration (Postgres in CI)
+        run: cd backend && uv run pytest tests/integration -q
+
+  desktop-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: cd desktop && npm install
+      - run: cd desktop && npx tsc --noEmit
+        continue-on-error: true

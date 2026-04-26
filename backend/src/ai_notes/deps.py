@@ -1,0 +1,22 @@
+from __future__ import annotations
+
+from collections.abc import AsyncIterator
+
+from fastapi import Request
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ai_notes.config import AppSettings
+from ai_notes.infrastructure.db.session import get_session_maker
+
+
+async def get_db() -> AsyncIterator[AsyncSession]:
+    sm = get_session_maker()
+    async with sm() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
+
+
+def get_app_settings(request: Request) -> AppSettings:
+    return request.app.state.settings  # type: ignore[no-any-return]

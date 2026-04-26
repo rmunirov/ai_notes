@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.uv/
+uv.lock~
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Node / frontend
+node_modules/
+dist/
+build/
+.turbo/
+.next/
+
+# Rust / Tauri
+target/
+**/*.rs.bk
+
+# Env & secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# OS / editors
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+*.swp
+*.tmp
+
+# Universal
+*.egg
