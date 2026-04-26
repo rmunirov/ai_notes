@@ -7,7 +7,12 @@ import "./index.css";
 async function boot() {
   try {
     const t = await import("@tauri-apps/api/core");
-    initTauri(t.invoke);
+    // Пакет есть и в Vite, но `invoke` требует webview Tauri; в браузере — только HTTP-прокси
+    if (t.isTauri()) {
+      initTauri(t.invoke);
+    } else {
+      initTauri(null);
+    }
   } catch {
     initTauri(null);
   }

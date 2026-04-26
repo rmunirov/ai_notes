@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import uuid
-from typing import Literal
+from typing import Any, Literal, cast
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ai_notes.agent.graph import build_agent_graph, memory_checkpointer
 from ai_notes.config import AppSettings
 from ai_notes.domain.agent import (
     AgentMessageView,
@@ -15,15 +17,20 @@ from ai_notes.domain.agent import (
     SourceNoteRef,
     ThreadMessagesResponse,
 )
-from ai_notes.domain.search import SearchRequest
 from ai_notes.infrastructure.db.models import AgentMessageModel, AgentThreadModel
 from ai_notes.infrastructure.llm.factory import LLMProviderFactory
-from ai_notes.services.search_service import SearchService, SearchUnavailableError
+from ai_notes.services.search_service import SearchUnavailableError
 
 
 class AgentService:
-    def __init__(self, settings: AppSettings) -> None:
+    def __init__(
+        self,
+        settings: AppSettings,
+        *,
+        checkpointer: BaseCheckpointSaver[Any] | None = None,
+    ) -> None:
         self._settings = settings
+        self._checkpointer = checkpointer
 
     async def query(self, session: AsyncSession, req: AgentQueryRequest) -> AgentQueryResponse:
         if not LLMProviderFactory.is_configured_for_remote(self._settings.llm):
@@ -53,61 +60,28 @@ class AgentService:
         )
         await session.flush()
 
-        search = await SearchService(self._settings.llm).search(
-            session, SearchRequest(query=req.question, limit=5)
-        )
-        if not search.results:
-            answer = "В ваших заметках нет достаточно информации, чтобы ответить на этот вопрос."
-            session.add(
-                AgentMessageModel(
-                    id=uuid.uuid4(),
-                    thread_id=thread_id,
-                    role="assistant",
-                    content=answer,
-                    source_note_ids=[],
-                    confidence_level="none",
-                )
-            )
-            await session.commit()
-            return AgentQueryResponse(
-                answer=answer,
-                confidence="none",
-                source_notes=[],
-                thread_id=thread_id,
-                is_grounded=False,
-            )
+        cp = self._checkpointer or memory_checkpointer()
+        graph = build_agent_graph(session, self._settings, cp)
+        cfg: RunnableConfig = {
+            "configurable": {"thread_id": str(thread_id)},
+        }
+        raw_out = await graph.ainvoke({"question": req.question}, config=cfg)
+        out: dict[str, Any] = raw_out if isinstance(raw_out, dict) else {}
 
-        lines: list[str] = []
+        answer = str(out.get("answer", ""))
+        c_raw = out.get("confidence", "none")
+        conf: Literal["high", "medium", "low", "none"] = (
+            cast(Literal["high", "medium", "low", "none"], c_raw)
+            if c_raw in ("high", "medium", "low", "none")
+            else "none"
+        )
+        is_grounded = bool(out.get("is_grounded", False))
+        sn_raw = out.get("source_notes") or []
         source_refs: list[SourceNoteRef] = []
-        seen: set[uuid.UUID] = set()
-        for r in search.results:
-            if r.note_id in seen:
-                continue
-            seen.add(r.note_id)
-            lines.append(f"[note_id={r.note_id}] {r.note_title}\nФрагмент: {r.chunk_text}\n")
-            source_refs.append(
-                SourceNoteRef(
-                    note_id=r.note_id,
-                    note_title=r.note_title,
-                    relevance_snippet=r.chunk_text[:200],
-                )
-            )
-        context = "\n".join(lines)
-        llm = LLMProviderFactory.chat_model(self._settings.llm)
-        sys = SystemMessage(
-            content=(
-                "You answer ONLY using the provided note excerpts. "
-                "If the excerpts are insufficient, say in Russian that the notes do not "
-                "contain enough information. Do not invent facts. Answer in Russian."
-            )
-        )
-        hum = HumanMessage(
-            content=(f"Контекст из заметок пользователя:\n{context}\n\nВопрос: {req.question}")
-        )
-        res = await llm.ainvoke([sys, hum])
-        answer = str(res.content)
-        is_grounded = _infer_grounded(answer)
-        conf: Literal["high", "medium", "low", "none"] = "high" if is_grounded else "none"
+        for d in sn_raw:
+            if isinstance(d, dict):
+                source_refs.append(SourceNoteRef.model_validate(d))
+
         session.add(
             AgentMessageModel(
                 id=uuid.uuid4(),
@@ -154,9 +128,10 @@ class AgentService:
             )
         return ThreadMessagesResponse(thread_id=thread_id, messages=msgs)
 
-
-def _infer_grounded(answer: str) -> bool:
-    a = answer.lower()
-    if "недостаточно" in a or "недостаточно информации" in a:
-        return False
-    return not ("не содержат" in a and "информац" in a)
+    @staticmethod
+    def from_settings(
+        settings: AppSettings,
+        *,
+        checkpointer: BaseCheckpointSaver[Any] | None = None,
+    ) -> AgentService:
+        return AgentService(settings, checkpointer=checkpointer)

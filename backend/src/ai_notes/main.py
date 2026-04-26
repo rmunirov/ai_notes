@@ -9,6 +9,7 @@ from typing import Any
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from ai_notes import __version__
@@ -24,27 +25,44 @@ async def lifespan(app: FastAPI) -> Any:
     settings = get_settings()
     app.state.settings = settings
     app.state.version = __version__
+    app.state.agent_checkpointer = None
     init_engine(settings.db_url)
     from sqlalchemy import text
 
     try:
-        from langgraph.checkpoint.postgres import PostgresSaver
+        from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
-        with PostgresSaver.from_conn_string(settings.checkpoint_url) as saver:
-            saver.setup()
+        async with AsyncPostgresSaver.from_conn_string(
+            settings.checkpoint_url,
+        ) as checkpointer:
+            await checkpointer.setup()
+            app.state.agent_checkpointer = checkpointer
+            try:
+                async with get_engine().connect() as c:
+                    await c.execute(text("SELECT 1"))
+            except Exception as e:  # noqa: BLE001
+                log.error("DB health check at startup: %s", e)
+            yield
     except Exception as e:  # noqa: BLE001
-        log.info("Postgres checkpointer not initialized (optional for MVP): %s", e)
-    try:
-        async with get_engine().connect() as c:
-            await c.execute(text("SELECT 1"))
-    except Exception as e:  # noqa: BLE001
-        log.error("DB health check at startup: %s", e)
-    yield
+        log.info("AsyncPostgres checkpointer unavailable, agent uses in-memory: %s", e)
+        try:
+            async with get_engine().connect() as c:
+                await c.execute(text("SELECT 1"))
+        except Exception as e2:  # noqa: BLE001
+            log.error("DB health check at startup: %s", e2)
+        yield
     await close_engine()
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="AI Notes API", version=__version__, lifespan=lifespan)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.include_router(health.router)
     app.include_router(notes.router)
     app.include_router(search.router)

@@ -13,20 +13,54 @@ export function SearchBar() {
     return () => clearTimeout(t);
   }, [v, s]);
   return (
-    <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+    <div style={{ display: "flex", gap: tokens.space.sm, marginBottom: tokens.space.sm, alignItems: "center" }}>
       <input
         aria-label="Семантический поиск"
         value={v}
         onChange={(e) => setV(e.target.value)}
-        placeholder="Поиск по смыслу…"
-        style={{ flex: 1, padding: 8, background: tokens.colors.surface, color: tokens.colors.text, border: `1px solid ${tokens.colors.border}` }}
+        placeholder="Семантический поиск…"
+        style={{
+          flex: 1,
+          minWidth: 0,
+          height: 56,
+          padding: "0 12px",
+          background: tokens.colors.surfaceContainerHigh,
+          color: tokens.colors.onSurface,
+          border: `1px solid ${tokens.colors.outlineVariant}`,
+          borderRadius: tokens.radius.xs,
+          fontFamily: "inherit",
+          fontSize: 16,
+          outline: "none",
+        }}
       />
-      {s.searchLoading && <span>…</span>}
-      {v && (
-        <button type="button" onClick={() => { setV(""); s.clearSearch(); }}>
+      {s.searchLoading && (
+        <span style={{ color: tokens.colors.onSurfaceVariant, fontSize: 14 }}>…</span>
+      )}
+      {v ? (
+        <button
+          type="button"
+          onClick={() => {
+            setV("");
+            s.clearSearch();
+          }}
+          style={{
+            margin: 0,
+            padding: "10px 12px",
+            minHeight: 36,
+            fontFamily: "inherit",
+            fontSize: 14,
+            fontWeight: 500,
+            color: tokens.colors.primary,
+            background: "transparent",
+            border: "none",
+            borderRadius: tokens.radius.pill,
+            cursor: "pointer",
+            flexShrink: 0,
+          }}
+        >
           Сброс
         </button>
-      )}
+      ) : null}
     </div>
   );
 }

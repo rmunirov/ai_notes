@@ -6,7 +6,28 @@ import sys
 from logging.config import fileConfig
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+_BACKEND_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _load_backend_env() -> None:
+    """Load backend/.env so `uv run alembic` works without manual export."""
+    path = _BACKEND_ROOT / ".env"
+    if not path.is_file():
+        return
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, val = line.split("=", 1)
+        key, val = key.strip(), val.strip()
+        if len(val) >= 2 and val[0] == val[-1] and val[0] in "\"'":
+            val = val[1:-1]
+        if key and key not in os.environ:
+            os.environ[key] = val
+
+
+_load_backend_env()
+sys.path.insert(0, str(_BACKEND_ROOT / "src"))
 
 from alembic import context
 from sqlalchemy import pool

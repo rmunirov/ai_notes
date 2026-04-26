@@ -16,7 +16,8 @@ from ai_notes.infrastructure.db.session import close_engine
 from ai_notes.main import create_app
 
 TEST_DB_URL = os.environ.get(
-    "TEST_DB_URL", "postgresql+asyncpg://ai_notes:ai_notes@127.0.0.1:5432/ai_notes"
+    "TEST_DB_URL",
+    "postgresql+asyncpg://ai_notes:ai_notes@127.0.0.1:5433/ai_notes",
 )
 
 
@@ -35,7 +36,7 @@ async def client() -> AsyncIterator[AsyncClient]:
     os.environ["DB_URL"] = TEST_DB_URL
     await reset_schema(TEST_DB_URL)
     app = create_app()
-    async with LifespanManager(app):
+    async with LifespanManager(app):  # noqa: SIM117
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             yield ac
     await close_engine()

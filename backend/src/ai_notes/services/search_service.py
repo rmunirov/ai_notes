@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai_notes.config import LLMSettings
 from ai_notes.domain.search import SearchRequest, SearchResponse, SearchResultItem
+from ai_notes.infrastructure.db.models import EMBED_DIM
 from ai_notes.infrastructure.embeddings.provider import LangChainEmbeddingProvider
 from ai_notes.infrastructure.llm.factory import LLMProviderFactory
 
@@ -21,6 +22,13 @@ class SearchService:
             raise SearchUnavailableError(msg)
         emb = LangChainEmbeddingProvider(LLMProviderFactory.embeddings(self._settings))
         query_vec = await emb.embed_query(req.query)
+        if len(query_vec) != EMBED_DIM:
+            msg = (
+                f"Размерность эмбеддинга запроса ({len(query_vec)}) не совпадает с БД (vector({EMBED_DIM})). "
+                "Укажите в .env LLM_EMBEDDING_MODEL и LLM_EMBEDDING_DIMENSIONS под ваш API, "
+                "либо смените схему/переиндексируйте чанки под ту же размерность."
+            )
+            raise SearchUnavailableError(msg)
         vec_literal = "[" + ",".join(str(float(x)) for x in query_vec) + "]"
         sql = text(
             """

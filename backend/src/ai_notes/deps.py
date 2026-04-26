@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from typing import Any
 
 from fastapi import Request
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai_notes.config import AppSettings
@@ -20,3 +22,7 @@ async def get_db() -> AsyncIterator[AsyncSession]:
 
 def get_app_settings(request: Request) -> AppSettings:
     return request.app.state.settings  # type: ignore[no-any-return]
+
+
+def get_agent_checkpointer(request: Request) -> BaseCheckpointSaver[Any] | None:
+    return getattr(request.app.state, "agent_checkpointer", None)

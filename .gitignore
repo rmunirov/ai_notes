@@ -17,6 +17,7 @@ htmlcov/
 
 # Node / frontend
 node_modules/
+*.tsbuildinfo
 dist/
 build/
 .turbo/
