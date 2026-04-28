@@ -5,6 +5,7 @@ from typing import Any
 
 from fastapi import Request
 from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.graph.state import CompiledStateGraph
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai_notes.config import AppSettings
@@ -26,3 +27,7 @@ def get_app_settings(request: Request) -> AppSettings:
 
 def get_agent_checkpointer(request: Request) -> BaseCheckpointSaver[Any] | None:
     return getattr(request.app.state, "agent_checkpointer", None)
+
+
+def get_agent(request: Request) -> CompiledStateGraph[Any, Any, Any, Any] | None:
+    return getattr(request.app.state, "agent", None)

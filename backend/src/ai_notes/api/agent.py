@@ -4,11 +4,11 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.graph.state import CompiledStateGraph
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai_notes.config import AppSettings
-from ai_notes.deps import get_agent_checkpointer, get_app_settings, get_db
+from ai_notes.deps import get_agent, get_app_settings, get_db
 from ai_notes.domain.agent import AgentQueryRequest, AgentQueryResponse, ThreadMessagesResponse
 from ai_notes.services.agent_service import AgentService
 from ai_notes.services.search_service import SearchUnavailableError
@@ -21,10 +21,10 @@ async def agent_query(
     body: AgentQueryRequest,
     session: AsyncSession = Depends(get_db),
     settings: AppSettings = Depends(get_app_settings),
-    checkpointer: BaseCheckpointSaver[Any] | None = Depends(get_agent_checkpointer),
+    agent: CompiledStateGraph[Any, Any, Any, Any] | None = Depends(get_agent),
 ) -> AgentQueryResponse:
     try:
-        return await AgentService(settings, checkpointer=checkpointer).query(session, body)
+        return await AgentService(settings, agent=agent).query(session, body)
     except SearchUnavailableError as e:
         raise HTTPException(
             status_code=503,

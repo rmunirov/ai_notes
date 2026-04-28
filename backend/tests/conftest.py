@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 
 import pytest_asyncio
 from asgi_lifespan import LifespanManager
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -32,11 +33,18 @@ async def reset_schema(url: str) -> None:
 
 
 @pytest_asyncio.fixture
-async def client() -> AsyncIterator[AsyncClient]:
+async def app_and_client() -> AsyncIterator[tuple[FastAPI, AsyncClient]]:
     os.environ["DB_URL"] = TEST_DB_URL
     await reset_schema(TEST_DB_URL)
     app = create_app()
     async with LifespanManager(app):  # noqa: SIM117
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-            yield ac
+            yield app, ac
     await close_engine()
+
+
+@pytest_asyncio.fixture
+async def client(
+    app_and_client: tuple[FastAPI, AsyncClient],
+) -> AsyncIterator[AsyncClient]:
+    yield app_and_client[1]

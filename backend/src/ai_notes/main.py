@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from ai_notes import __version__
+from ai_notes.agent.graph import build_agent, memory_checkpointer
 from ai_notes.api import agent, health, notes, search
 from ai_notes.config import get_settings
 from ai_notes.infrastructure.db.session import close_engine, get_engine, init_engine
@@ -26,6 +27,7 @@ async def lifespan(app: FastAPI) -> Any:
     app.state.settings = settings
     app.state.version = __version__
     app.state.agent_checkpointer = None
+    app.state.agent = None
     init_engine(settings.db_url)
     from sqlalchemy import text
 
@@ -37,6 +39,7 @@ async def lifespan(app: FastAPI) -> Any:
         ) as checkpointer:
             await checkpointer.setup()
             app.state.agent_checkpointer = checkpointer
+            app.state.agent = build_agent(settings, checkpointer)
             try:
                 async with get_engine().connect() as c:
                     await c.execute(text("SELECT 1"))
@@ -45,6 +48,8 @@ async def lifespan(app: FastAPI) -> Any:
             yield
     except Exception as e:  # noqa: BLE001
         log.info("AsyncPostgres checkpointer unavailable, agent uses in-memory: %s", e)
+        app.state.agent_checkpointer = memory_checkpointer()
+        app.state.agent = build_agent(settings, app.state.agent_checkpointer)
         try:
             async with get_engine().connect() as c:
                 await c.execute(text("SELECT 1"))

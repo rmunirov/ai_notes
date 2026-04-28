@@ -26,6 +26,29 @@ class AgentQueryResponse(BaseModel):
     is_grounded: bool
 
 
+class AgentAnswer(BaseModel):
+    """Structured-output schema produced by `langchain.agents.create_agent`.
+
+    Used as the `response_format` (via `ToolStrategy`) so the LLM yields a
+    machine-parsable answer instead of free-form text.
+    """
+
+    answer: str = Field(description="Ответ на вопрос пользователя на русском языке.")
+    confidence: Literal["high", "medium", "low", "none"] = Field(
+        description=(
+            "Уровень уверенности: 'high'/'medium'/'low' если ответ опирается на заметки, "
+            "'none' если данных в заметках недостаточно."
+        )
+    )
+    is_grounded: bool = Field(
+        description="True, если ответ полностью основан на предоставленных фрагментах заметок."
+    )
+    source_notes: list[SourceNoteRef] = Field(
+        default_factory=list,
+        description="Заметки, использованные для ответа (только если is_grounded=True).",
+    )
+
+
 class AgentMessageView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

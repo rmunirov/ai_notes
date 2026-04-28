@@ -16,6 +16,7 @@ class LLMProviderFactory:
             base_url=settings.base_url,
             api_key=key or "dummy",  # noqa: S105
             timeout=settings.timeout,
+            output_version="v0",
         )
 
     @staticmethod
