@@ -41,6 +41,7 @@ class AppSettings(BaseSettings):
     )
 
     debug: bool = False
+    log_level: str = Field(default="INFO", validation_alias=AliasChoices("LOG_LEVEL", "log_level"))
     port: int = 8765
     db_url: str = Field(
         default="postgresql+asyncpg://ai_notes:ai_notes@127.0.0.1:5432/ai_notes",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Any, Literal, cast
 
@@ -23,6 +24,7 @@ from ai_notes.infrastructure.llm.factory import LLMProviderFactory
 from ai_notes.services.search_service import SearchUnavailableError
 
 _INSUFFICIENT = "В ваших заметках нет достаточно информации, чтобы ответить на этот вопрос."
+_log = logging.getLogger(__name__)
 
 
 class AgentService:
@@ -37,6 +39,7 @@ class AgentService:
 
     async def query(self, session: AsyncSession, req: AgentQueryRequest) -> AgentQueryResponse:
         if not LLMProviderFactory.is_configured_for_remote(self._settings.llm):
+            _log.warning("agent query refused: LLM not configured")
             raise SearchUnavailableError(
                 "Настройте LLM-провайдер (ключ и base URL), чтобы использовать агента."
             )
@@ -44,12 +47,24 @@ class AgentService:
         if req.thread_id is not None:
             thread_id = req.thread_id
             if await session.get(AgentThreadModel, thread_id) is None:
-                msg = "Диалог не найден"
-                raise ValueError(msg)
+                session.add(AgentThreadModel(id=thread_id))
+                await session.flush()
+                _log.info(
+                    "agent query: started new thread_id=%s (client-supplied)",
+                    thread_id,
+                )
         else:
             thread_id = uuid.uuid4()
             session.add(AgentThreadModel(id=thread_id))
             await session.flush()
+            _log.info("agent query: started new thread_id=%s", thread_id)
+
+        _log.debug(
+            "agent query: thread_id=%s question_len=%d reused_thread=%s",
+            thread_id,
+            len(req.question),
+            req.thread_id is not None,
+        )
 
         session.add(
             AgentMessageModel(
@@ -76,13 +91,22 @@ class AgentService:
         is_grounded = bool(answer_obj.is_grounded)
         source_refs = list(answer_obj.source_notes) if is_grounded else []
 
+        _log.info(
+            "agent query finished: thread_id=%s confidence=%s grounded=%s sources=%d answer_len=%d",
+            thread_id,
+            conf,
+            is_grounded,
+            len(source_refs),
+            len(answer_obj.answer),
+        )
+
         session.add(
             AgentMessageModel(
                 id=uuid.uuid4(),
                 thread_id=thread_id,
                 role="assistant",
                 content=answer_obj.answer,
-                source_note_ids=[r.note_id for r in source_refs],
+                source_note_ids=[uuid.UUID(r.note_id) for r in source_refs],
                 confidence_level=conf,
             )
         )
@@ -105,15 +129,18 @@ class AgentService:
             try:
                 return AgentAnswer.model_validate(structured)
             except Exception:  # noqa: BLE001
-                pass
+                _log.warning("structured_response dict failed pydantic validation; falling back")
+
         last_text = _last_ai_text(out.get("messages"))
         if last_text:
+            _log.warning("structured_response missing or invalid; using last AI message text")
             return AgentAnswer(
                 answer=last_text,
                 confidence="none",
                 is_grounded=False,
                 source_notes=[],
             )
+        _log.warning("no structured_response or AI text; using insufficient-information template")
         return AgentAnswer(
             answer=_INSUFFICIENT,
             confidence="none",
@@ -125,6 +152,7 @@ class AgentService:
         self, session: AsyncSession, thread_id: uuid.UUID
     ) -> ThreadMessagesResponse | None:
         if await session.get(AgentThreadModel, thread_id) is None:
+            _log.debug("agent list_messages: thread_id=%s not found", thread_id)
             return None
         r = await session.execute(
             select(AgentMessageModel)
@@ -132,6 +160,7 @@ class AgentService:
             .order_by(AgentMessageModel.created_at)
         )
         rows = r.scalars().all()
+        _log.debug("agent list_messages: thread_id=%s count=%d", thread_id, len(rows))
         msgs: list[AgentMessageView] = []
         for m in rows:
             msgs.append(

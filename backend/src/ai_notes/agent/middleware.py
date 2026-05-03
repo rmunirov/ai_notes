@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any, cast
 
 from langchain.agents.middleware import wrap_tool_call
@@ -11,6 +12,8 @@ from ai_notes.agent import nodes
 from ai_notes.agent.context import AgentContext
 from ai_notes.domain.search import SearchResultItem
 from ai_notes.infrastructure.llm.factory import LLMProviderFactory
+
+_log = logging.getLogger(__name__)
 
 
 def _parse_chunks(content: Any) -> list[SearchResultItem]:
@@ -65,6 +68,11 @@ async def _grade_relevance_async(
     chat = LLMProviderFactory.chat_model(ctx_obj.settings.llm)
     relevant, _flags = await nodes.grade_relevance_of_chunks(chat, question, chunks)
     filtered = [r.model_dump(mode="json") for r in relevant]
+    _log.debug(
+        "grade_relevance: raw_chunks=%d kept=%d",
+        len(chunks),
+        len(relevant),
+    )
 
     return ToolMessage(
         content=json.dumps(filtered, ensure_ascii=False),

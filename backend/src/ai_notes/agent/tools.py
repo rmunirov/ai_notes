@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from langchain.tools import ToolRuntime, tool
@@ -7,6 +8,8 @@ from langchain.tools import ToolRuntime, tool
 from ai_notes.agent.context import AgentContext
 from ai_notes.domain.search import SearchRequest
 from ai_notes.services.search_service import SearchService, SearchUnavailableError
+
+_log = logging.getLogger(__name__)
 
 
 @tool
@@ -27,12 +30,16 @@ async def search_notes(
         and `similarity_score`.
     """
     if runtime.context is None:
+        _log.warning("search_notes tool: missing ToolRuntime.context")
         return []
     ctx: AgentContext = runtime.context
     try:
         resp = await SearchService(ctx.settings.llm).search(
             ctx.session, SearchRequest(query=query, limit=5)
         )
-    except SearchUnavailableError:
+    except SearchUnavailableError as exc:
+        _log.warning("search_notes tool: search failed: %s", exc)
         return []
+    n = len(resp.results)
+    _log.debug("search_notes tool: query_len=%d results=%d", len(query), n)
     return [r.model_dump(mode="json") for r in resp.results]

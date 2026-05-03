@@ -4,13 +4,25 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class SourceNoteRef(BaseModel):
-    note_id: UUID
+    """Refs from LLM structured output; ``note_id`` is str so providers (e.g. GigaChat)
+    that reject JSON Schema ``format: uuid`` still accept the tool response schema."""
+
+    note_id: str = Field(description="Идентификатор заметки в виде строки UUID.")
     note_title: str
     relevance_snippet: str = ""
+
+    @field_validator("note_id", mode="before")
+    @classmethod
+    def _note_id_as_uuid_string(cls, v: object) -> str:
+        if isinstance(v, UUID):
+            return str(v)
+        if isinstance(v, str):
+            return str(UUID(v))
+        raise TypeError("note_id must be a UUID string")
 
 
 class AgentQueryRequest(BaseModel):

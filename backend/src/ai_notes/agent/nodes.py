@@ -134,9 +134,7 @@ async def run_generate_llm(
 
     source_notes = [
         SourceNoteRef(
-            note_id=row["note_id"] if isinstance(row["note_id"], uuid.UUID) else uuid.UUID(
-                str(row["note_id"])
-            ),
+            note_id=str(row["note_id"]),
             note_title=str(row["note_title"]),
             relevance_snippet=str(row["snip"]),
         )
