@@ -5,12 +5,22 @@ import { NoteEditor } from "./components/NoteEditor/NoteEditor";
 import { SaveErrorToast } from "./components/NoteEditor/SaveErrorToast";
 import { AgentPanel } from "./components/AgentPanel/AgentPanel";
 import { useNotesStore } from "./store/notesStore";
+import { tokens } from "./theme/tokens";
+import { ShellLayoutProvider } from "./layout/ShellLayoutContext";
 
-export function App() {
+function AppShell() {
   const [showAgent, setShowAgent] = useState(true);
   const s = useNotesStore();
   return (
-    <div style={{ display: "flex", height: "100vh" }}>
+    <div
+      style={{
+        display: "flex",
+        height: "100vh",
+        overflow: "hidden",
+        minWidth: 0,
+        minHeight: 0,
+      }}
+    >
       <ErrorBoundary label="Список">
         <NoteList />
       </ErrorBoundary>
@@ -25,18 +35,42 @@ export function App() {
       )}
       {showAgent ? (
         <ErrorBoundary label="Агент">
-          <AgentPanel />
+          <AgentPanel onRequestClose={() => setShowAgent(false)} />
         </ErrorBoundary>
-      ) : null}
-      <button
-        type="button"
-        onClick={() => setShowAgent((v) => !v)}
-        style={{ position: "fixed", top: 8, right: 8, zIndex: 9 }}
-        aria-pressed={showAgent}
-        aria-label="Показать панель агента"
-      >
-        {showAgent ? "Скрыть агента" : "Показать агента"}
-      </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setShowAgent(true)}
+          style={{
+            position: "fixed",
+            top: 16,
+            right: 16,
+            zIndex: 9,
+            margin: 0,
+            padding: "10px 12px",
+            minHeight: 36,
+            fontFamily: "inherit",
+            fontSize: 14,
+            fontWeight: 500,
+            color: tokens.colors.primary,
+            background: "transparent",
+            border: "none",
+            borderRadius: tokens.radius.pill,
+            cursor: "pointer",
+          }}
+          aria-label="Показать панель агента"
+        >
+          Показать агента
+        </button>
+      )}
     </div>
+  );
+}
+
+export function App() {
+  return (
+    <ShellLayoutProvider>
+      <AppShell />
+    </ShellLayoutProvider>
   );
 }

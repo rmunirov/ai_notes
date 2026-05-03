@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 
 from fastapi import BackgroundTasks
@@ -18,7 +19,7 @@ from ai_notes.infrastructure.db.session import get_session_maker
 from ai_notes.services.indexing_service import IndexingService
 from ai_notes.util.text import html_to_plain_text, preview_text
 
-
+_log = logging.getLogger(__name__)
 class NoteService:
     def __init__(self, settings: AppSettings) -> None:
         self._settings = settings
@@ -30,6 +31,7 @@ class NoteService:
         repo = NoteRepository(session)
         row = await repo.create(title=data.title, body_html=data.body_html, body_text=body_text)
         await session.commit()
+        _log.info("note created note_id=%s", row.id)
         if bg is not None:
             self._schedule_reindex(bg, row.id)
         return Note.model_validate(row)
@@ -72,6 +74,7 @@ class NoteService:
         if row is None:
             return None
         await session.commit()
+        _log.info("note updated note_id=%s", note_id)
         if bg is not None:
             self._schedule_reindex(bg, row.id)
         return Note.model_validate(row)
@@ -81,6 +84,7 @@ class NoteService:
         ok = await repo.remove(note_id)
         if ok:
             await session.commit()
+            _log.info("note deleted note_id=%s", note_id)
         return ok
 
     def _schedule_reindex(self, bg: BackgroundTasks, note_id: uuid.UUID) -> None:
@@ -89,8 +93,11 @@ class NoteService:
 
         async def _job() -> None:
             async with sm() as s:
-                await IndexingService(settings.llm).reindex_note(s, note_id)
-                await s.commit()
+                try:
+                    await IndexingService(settings.llm).reindex_note(s, note_id)
+                    await s.commit()
+                except Exception:
+                    _log.exception("background reindex failed note_id=%s", note_id)
 
         bg.add_task(_job)
 

@@ -16,6 +16,7 @@ class LLMProviderFactory:
             base_url=settings.base_url,
             api_key=key or "dummy",  # noqa: S105
             timeout=settings.timeout,
+            output_version="v0",
         )
 
     @staticmethod
@@ -23,8 +24,9 @@ class LLMProviderFactory:
         key = settings.api_key.get_secret_value()
         return OpenAIEmbeddings(
             model=settings.embedding_model,
-            openai_api_base=settings.base_url,
-            openai_api_key=key or "dummy",  # noqa: S105
+            base_url=settings.base_url,
+            api_key=key or "dummy",  # noqa: S105
+            dimensions=settings.embedding_dimensions,
         )
 
     @staticmethod

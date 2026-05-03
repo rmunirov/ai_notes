@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 
 from sqlalchemy import text
@@ -7,10 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai_notes.config import LLMSettings
 from ai_notes.domain.search import SearchRequest, SearchResponse, SearchResultItem
+from ai_notes.infrastructure.db.models import EMBED_DIM
 from ai_notes.infrastructure.embeddings.provider import LangChainEmbeddingProvider
 from ai_notes.infrastructure.llm.factory import LLMProviderFactory
 
-
+_log = logging.getLogger(__name__)
 class SearchService:
     def __init__(self, settings: LLMSettings) -> None:
         self._settings = settings
@@ -21,6 +23,14 @@ class SearchService:
             raise SearchUnavailableError(msg)
         emb = LangChainEmbeddingProvider(LLMProviderFactory.embeddings(self._settings))
         query_vec = await emb.embed_query(req.query)
+        if len(query_vec) != EMBED_DIM:
+            msg = (
+                f"Размерность эмбеддинга запроса ({len(query_vec)}) не совпадает с БД "
+                f"(vector({EMBED_DIM})). "
+                "Укажите в .env LLM_EMBEDDING_MODEL и LLM_EMBEDDING_DIMENSIONS под ваш API, "
+                "либо смените схему/переиндексируйте чанки под ту же размерность."
+            )
+            raise SearchUnavailableError(msg)
         vec_literal = "[" + ",".join(str(float(x)) for x in query_vec) + "]"
         sql = text(
             """
@@ -59,6 +69,12 @@ class SearchService:
             )
             for x in results_sorted
         ]
+        _log.info(
+            "semantic search: candidates=%d unique_notes=%d limit=%d",
+            len(rows),
+            len(by_note),
+            req.limit,
+        )
         return SearchResponse(query=req.query, results=items, total=len(items))
 
 

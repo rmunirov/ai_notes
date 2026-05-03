@@ -7,8 +7,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class LLMSettings(BaseSettings):
+    # Nested settings do not inherit parent's env_file; same paths as AppSettings
+    # so LLM_* keys in backend/.env are applied when cwd is the backend package root.
     model_config = SettingsConfigDict(
         env_prefix="LLM_",
+        env_file=(".env",),
+        env_file_encoding="utf-8",
         extra="ignore",
     )
 
@@ -19,7 +23,7 @@ class LLMSettings(BaseSettings):
     api_key: SecretStr = Field(default=SecretStr(""))
     model: str = "gpt-4o-mini"
     embedding_model: str = "text-embedding-3-small"
-    embedding_dimensions: int = 1536
+    embedding_dimensions: int = 2560
     timeout: float = 30.0
     enabled: bool = True
 
@@ -37,6 +41,7 @@ class AppSettings(BaseSettings):
     )
 
     debug: bool = False
+    log_level: str = Field(default="INFO", validation_alias=AliasChoices("LOG_LEVEL", "log_level"))
     port: int = 8765
     db_url: str = Field(
         default="postgresql+asyncpg://ai_notes:ai_notes@127.0.0.1:5432/ai_notes",

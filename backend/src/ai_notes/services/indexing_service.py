@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai_notes.config import LLMSettings
@@ -41,3 +41,16 @@ class IndexingService:
                 )
             )
         await session.flush()
+
+    async def reindex_all_notes(self, session: AsyncSession) -> int:
+        """Re-embed every note; commits after each note so partial progress is kept."""
+        if not LLMProviderFactory.is_configured_for_remote(self._settings):
+            return 0
+        r = await session.execute(select(NoteModel.id))
+        ids = list(r.scalars().all())
+        n = 0
+        for note_id in ids:
+            await self.reindex_note(session, note_id)
+            await session.commit()
+            n += 1
+        return n

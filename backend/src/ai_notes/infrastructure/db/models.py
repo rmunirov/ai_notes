@@ -19,7 +19,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ai_notes.infrastructure.db.base import Base
 
-EMBED_DIM = 1536  # overriden at service layer; schema uses fixed 1536 in migrations
+EMBED_DIM = 2560  # must match note_chunks.embedding (Alembic) and LLM_EMBEDDING_DIMENSIONS
 
 
 class NoteModel(Base):

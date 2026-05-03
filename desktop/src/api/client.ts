@@ -33,5 +33,9 @@ export async function apiSend<T>(path: string, init: RequestInit): Promise<T> {
     const t = await r.text();
     throw new Error(t || `${r.status}`);
   }
-  return (await r.json()) as T;
+  const text = await r.text();
+  if (!text) {
+    return undefined as T;
+  }
+  return JSON.parse(text) as T;
 }

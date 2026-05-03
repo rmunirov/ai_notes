@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,6 +9,8 @@ from ai_notes.config import AppSettings
 from ai_notes.deps import get_app_settings, get_db
 from ai_notes.domain.search import SearchRequest, SearchResponse
 from ai_notes.services.search_service import SearchService, SearchUnavailableError
+
+_log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/search", tags=["search"])
 
@@ -20,6 +24,7 @@ async def search_notes(
     try:
         return await SearchService(settings.llm).search(session, body)
     except SearchUnavailableError as e:
+        _log.warning("search POST failed: %s", e)
         raise HTTPException(
             status_code=503,
             detail={
